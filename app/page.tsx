@@ -19,8 +19,8 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN IA ---
-// CLAVE HARDCODED PARA SOLUCIÓN RÁPIDA
-const apiKey = "AIzaSyAVeyg2FV5gMKRaTSbdgvZ-5VauGhSvETk";
+// CLAVE NUEVA HARDCODED (Para que funcione YA)
+const apiKey = "AIzaSyAqnUY8EWiUc_JavA9YzArmL_NJjK4ij70";
 let genAI: GoogleGenerativeAI | null = null;
 
 if (apiKey) {
