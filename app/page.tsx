@@ -1,9 +1,7 @@
-// app/page.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-// IMPORTANTE: Usamos la nueva librería que tenías en tu código
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   User, 
   Utensils, 
@@ -13,21 +11,20 @@ import {
   RefreshCw,
   BrainCircuit,
   Leaf,
-  Send
+  Send,
+  Scale
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN IA SEGURA ---
-// NOTA IMPORTANTE: En Vercel, la variable debe llamarse NEXT_PUBLIC_GEMINI_API_KEY
-// para que esté disponible en el navegador.
+// --- CONFIGURACIÓN IA ---
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-const ai = new GoogleGenAI({ apiKey: apiKey });
+const genAI = new GoogleGenerativeAI(apiKey);
 
 // --- TIPOS ---
 interface UserProfile {
   name: string;
   age: number;
-  weight: number; // kg
-  height: number; // cm
+  weight: number;
+  height: number;
   gender: 'male' | 'female';
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'athlete';
   goal: 'lose_weight' | 'maintain' | 'gain_muscle';
@@ -37,8 +34,7 @@ interface UserProfile {
 interface UserMetrics {
   bmi: number;
   bmiCategory: string;
-  tdee: number; // Calorías de mantenimiento
-  targetCalories: number; // Calorías para el objetivo
+  targetCalories: number;
   protein: number;
   carbs: number;
   fats: number;
@@ -65,7 +61,6 @@ interface ChatMessage {
 
 // --- UTILS ---
 const calculateMetrics = (profile: UserProfile): UserMetrics => {
-  // 1. BMI
   const heightM = profile.height / 100;
   const bmi = parseFloat((profile.weight / (heightM * heightM)).toFixed(1));
   let bmiCategory = 'Normal';
@@ -73,11 +68,9 @@ const calculateMetrics = (profile: UserProfile): UserMetrics => {
   else if (bmi >= 25 && bmi < 29.9) bmiCategory = 'Sobrepeso';
   else if (bmi >= 30) bmiCategory = 'Obesidad';
 
-  // 2. BMR (Mifflin-St Jeor)
   let bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age;
   bmr += profile.gender === 'male' ? 5 : -161;
 
-  // 3. TDEE (Activity)
   const activityMultipliers = {
     sedentary: 1.2,
     light: 1.375,
@@ -87,17 +80,15 @@ const calculateMetrics = (profile: UserProfile): UserMetrics => {
   };
   const tdee = Math.round(bmr * activityMultipliers[profile.activityLevel]);
 
-  // 4. Target Calories
   let targetCalories = tdee;
   if (profile.goal === 'lose_weight') targetCalories -= 400;
   if (profile.goal === 'gain_muscle') targetCalories += 300;
 
-  // 5. Macros (Simple split 30P/40C/30F approx)
   const protein = Math.round((targetCalories * 0.3) / 4);
   const fats = Math.round((targetCalories * 0.3) / 9);
   const carbs = Math.round((targetCalories * 0.4) / 4);
 
-  return { bmi, bmiCategory, tdee, targetCalories, protein, carbs, fats };
+  return { bmi, bmiCategory, targetCalories, protein, carbs, fats };
 };
 
 // --- COMPONENTES ---
@@ -108,24 +99,20 @@ const LoadingScreen = ({ text }: { text: string }) => (
       <div className="absolute inset-0 border-4 border-zinc-800 rounded-full"></div>
       <div className="absolute inset-0 border-4 border-t-emerald-500 rounded-full animate-spin"></div>
     </div>
-    <p className="text-emerald-500 font-medium animate-pulse">{text}</p>
+    <p className="text-emerald-500 font-medium animate-pulse text-center">{text}</p>
   </div>
 );
 
-// 1. ONBOARDING
 const Onboarding = ({ onComplete }: { onComplete: (p: UserProfile) => void }) => {
   const [step, setStep] = useState(1);
-  // Use any to allow empty strings in inputs during editing
   const [data, setData] = useState<any>({
     name: '', age: '', weight: '', height: '', gender: 'male',
     activityLevel: 'moderate', goal: 'maintain', dietType: 'omnivore'
   });
 
   const next = () => {
-    if (step < 4) {
-      setStep(s => s + 1);
-    } else {
-      // Validate and cast to numbers before completing
+    if (step < 4) setStep(s => s + 1);
+    else {
       onComplete({
         ...data,
         age: Number(data.age) || 30,
@@ -135,27 +122,25 @@ const Onboarding = ({ onComplete }: { onComplete: (p: UserProfile) => void }) =>
     }
   };
   
-  const update = (k: keyof UserProfile, v: any) => setData((p: any) => ({...p, [k]: v}));
+  const update = (k: string, v: any) => setData((p: any) => ({...p, [k]: v}));
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-zinc-950 to-zinc-900 text-white">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
       <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <div className="inline-flex p-4 rounded-2xl bg-emerald-500/10 text-emerald-500 mb-2">
-            <BrainCircuit size={40} />
-          </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">NutriGenius AI</h1>
-          <p className="text-zinc-400">Tu nutricionista personal inteligente</p>
+        <div className="text-center">
+          <BrainCircuit size={48} className="text-emerald-500 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold">NutriGenius AI</h1>
+          <p className="text-zinc-500">Chile Edition</p>
         </div>
 
-        <div className="glass-panel p-8 rounded-3xl space-y-6">
+        <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 space-y-6">
           {step === 1 && (
-            <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-              <h2 className="text-xl font-semibold text-white">Datos Básicos</h2>
-              <input type="text" placeholder="Tu Nombre" className="w-full bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500 transition-colors" value={data.name} onChange={e => update('name', e.target.value)} />
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Datos Básicos</h2>
+              <input type="text" placeholder="Tu Nombre" className="w-full bg-zinc-800 border border-zinc-700 p-4 rounded-xl outline-none focus:border-emerald-500" value={data.name} onChange={e => update('name', e.target.value)} />
               <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Edad" className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" value={data.age} onChange={e => update('age', e.target.value)} />
-                <select className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" value={data.gender} onChange={e => update('gender', e.target.value)}>
+                <input type="number" placeholder="Edad" className="bg-zinc-800 border border-zinc-700 p-4 rounded-xl outline-none focus:border-emerald-500" value={data.age} onChange={e => update('age', e.target.value)} />
+                <select className="bg-zinc-800 border border-zinc-700 p-4 rounded-xl outline-none" value={data.gender} onChange={e => update('gender', e.target.value)}>
                   <option value="male">Hombre</option>
                   <option value="female">Mujer</option>
                 </select>
@@ -164,272 +149,155 @@ const Onboarding = ({ onComplete }: { onComplete: (p: UserProfile) => void }) =>
           )}
 
           {step === 2 && (
-            <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-              <h2 className="text-xl font-semibold text-white">Medidas Corporales</h2>
-              <div className="space-y-4">
-                <div>
-                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1">Peso Actual (kg)</label>
-                    <input type="number" placeholder="Ej: 75" className="w-full bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500 text-2xl font-bold text-center" value={data.weight} onChange={e => update('weight', e.target.value)} />
-                </div>
-                <div>
-                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1">Altura (cm)</label>
-                    <input type="number" placeholder="Ej: 175" className="w-full bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500 text-2xl font-bold text-center" value={data.height} onChange={e => update('height', e.target.value)} />
-                </div>
-              </div>
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Medidas</h2>
+              <input type="number" placeholder="Peso (kg)" className="w-full bg-zinc-800 border border-zinc-700 p-4 rounded-xl text-center text-2xl font-bold" value={data.weight} onChange={e => update('weight', e.target.value)} />
+              <input type="number" placeholder="Altura (cm)" className="w-full bg-zinc-800 border border-zinc-700 p-4 rounded-xl text-center text-2xl font-bold" value={data.height} onChange={e => update('height', e.target.value)} />
             </div>
           )}
 
           {step === 3 && (
-            <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-              <h2 className="text-xl font-semibold text-white">Nivel de Actividad</h2>
-              <div className="space-y-2">
-                {[
-                  { id: 'sedentary', label: 'Sedentario', desc: 'Poco o nada de ejercicio' },
-                  { id: 'light', label: 'Ligero', desc: 'Ejercicio 1-3 días/sem' },
-                  { id: 'moderate', label: 'Moderado', desc: 'Ejercicio 3-5 días/sem' },
-                  { id: 'active', label: 'Activo', desc: 'Ejercicio 6-7 días/sem' },
-                  { id: 'athlete', label: 'Atleta', desc: 'Físico intenso diario' },
-                ].map((opt) => (
-                  <button key={opt.id} onClick={() => update('activityLevel', opt.id)}
-                    className={`w-full p-4 rounded-xl text-left transition-all border ${data.activityLevel === opt.id ? 'bg-emerald-500/20 border-emerald-500 text-white' : 'bg-zinc-900/30 border-zinc-800 text-zinc-400 hover:bg-zinc-800'}`}>
-                    <div className="font-bold text-sm">{opt.label}</div>
-                    <div className="text-xs opacity-70">{opt.desc}</div>
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold mb-4">Actividad</h2>
+              {['sedentary', 'light', 'moderate', 'active'].map((level) => (
+                <button key={level} onClick={() => update('activityLevel', level)} className={`w-full p-4 rounded-xl border ${data.activityLevel === level ? 'bg-emerald-500/20 border-emerald-500' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                  {level.toUpperCase()}
+                </button>
+              ))}
             </div>
           )}
 
-           {step === 4 && (
-            <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-              <h2 className="text-xl font-semibold text-white">Objetivo & Dieta</h2>
-              <div className="grid grid-cols-1 gap-3">
-                 <select className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" value={data.goal} onChange={e => update('goal', e.target.value)}>
-                  <option value="lose_weight">🔥 Perder Grasa</option>
-                  <option value="maintain">⚖️ Mantener Peso</option>
-                  <option value="gain_muscle">💪 Ganar Músculo</option>
-                </select>
-                <select className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" value={data.dietType} onChange={e => update('dietType', e.target.value)}>
-                  <option value="omnivore">🥩 Omnívoro (Todo)</option>
-                  <option value="vegetarian">🥗 Vegetariano</option>
-                  <option value="vegan">🌱 Vegano</option>
-                  <option value="keto">🥑 Keto</option>
-                </select>
-              </div>
+          {step === 4 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Objetivo</h2>
+              <select className="w-full bg-zinc-800 border border-zinc-700 p-4 rounded-xl" value={data.goal} onChange={e => update('goal', e.target.value)}>
+                <option value="lose_weight">Perder Grasa</option>
+                <option value="maintain">Mantener</option>
+                <option value="gain_muscle">Ganar Músculo</option>
+              </select>
+              <select className="w-full bg-zinc-800 border border-zinc-700 p-4 rounded-xl" value={data.dietType} onChange={e => update('dietType', e.target.value)}>
+                <option value="omnivore">Omnívoro</option>
+                <option value="vegetarian">Vegetariano</option>
+                <option value="vegan">Vegano</option>
+              </select>
             </div>
           )}
 
-          <button onClick={next} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 group">
-            {step === 4 ? 'Crear mi Plan' : 'Siguiente'}
-            <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform"/>
+          <button onClick={next} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-4 rounded-xl flex items-center justify-center gap-2">
+            {step === 4 ? 'Empezar' : 'Siguiente'} <ChevronRight size={20}/>
           </button>
-        </div>
-        
-        <div className="flex justify-center gap-2">
-            {[1,2,3,4].map(i => <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i <= step ? 'w-8 bg-emerald-500' : 'w-2 bg-zinc-800'}`} />)}
         </div>
       </div>
     </div>
   );
 };
 
-// 2. MAIN APP
 export default function Home() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [metrics, setMetrics] = useState<UserMetrics | null>(null);
-  const [activeTab, setActiveTab] = useState<'plan' | 'coach' | 'profile'>('plan');
-  
-  // State for Plan
+  const [activeTab, setActiveTab] = useState<'plan' | 'coach'>('plan');
   const [plan, setPlan] = useState<DailyPlan | null>(null);
-  const [loadingPlan, setLoadingPlan] = useState(false);
-
-  // State for Coach
+  const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [msgInput, setMsgInput] = useState('');
-  const [loadingMsg, setLoadingMsg] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
 
-  useEffect(() => {
-    // Load from localstorage
-    const savedProfile = localStorage.getItem('nutri_profile');
-    if (savedProfile) {
-      const p = JSON.parse(savedProfile);
-      setProfile(p);
-      setMetrics(calculateMetrics(p));
-    }
-    
-    const savedPlan = localStorage.getItem('nutri_plan');
-    if (savedPlan) setPlan(JSON.parse(savedPlan));
-  }, []);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, activeTab]);
-
-  const handleProfileComplete = (p: UserProfile) => {
-    setProfile(p);
-    setMetrics(calculateMetrics(p));
-    localStorage.setItem('nutri_profile', JSON.stringify(p));
-    generateDiet(p, calculateMetrics(p));
-  };
-
-  const generateDiet = async (userProfile: UserProfile, userMetrics: UserMetrics) => {
-    setLoadingPlan(true);
-    setPlan(null); // Clear previous
-    
-    if (!apiKey) {
-        alert("Error: Falta la API Key en Vercel.");
-        setLoadingPlan(false);
-        return;
-    }
-
+  const generateDiet = async (p: UserProfile, m: UserMetrics) => {
+    setLoading(true);
     try {
-      const prompt = `
-        Crea un plan de alimentación de 1 día (Desayuno, Almuerzo, Cena, Snack).
-        Perfil: ${userProfile.dietType}, Objetivo: ${userProfile.goal}.
-        Calorías Totales Objetivo: ${userMetrics.targetCalories}.
-        
-        CONTEXTO LOCAL: Chile.
-        INSTRUCCIONES DE INGREDIENTES: Usa exclusivamente ingredientes económicos y muy comunes en supermercados o ferias de Chile.
-        - Prioriza: Pollo, pavo, carne molida baja en grasa, jurel en lata, atún, huevos, legumbres (lentejas, porotos, garbanzos), arroz, fideos, papas, avena, pan (marraqueta/hallulla integral), frutas de estación (manzana, plátano, naranja) y verduras comunes (lechuga, tomate, zanahoria, zapallo).
-        - EVITA: Salmón, camarones, cortes de carne caros, frutas exóticas o ingredientes difíciles de encontrar.
-        - Estilo: Cocina casera, simple y rica.
-        
-        Devuelve SOLO un JSON con esta estructura exacta, sin texto extra:
-        {
-          "breakfast": { "name": "", "description": "", "calories": 0, "ingredients": [""] },
-          "lunch": { "name": "", "description": "", "calories": 0, "ingredients": [""] },
-          "dinner": { "name": "", "description": "", "calories": 0, "ingredients": [""] },
-          "snack": { "name": "", "description": "", "calories": 0, "ingredients": [""] }
-        }
-        Asegúrate que la suma de calorías sea aprox ${userMetrics.targetCalories}.
-      `;
-
-      // USO DE LA NUEVA LIBRERÍA @google/genai
-      const model = ai.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `Genera un plan de 1 día para ${p.name} (Objetivo: ${p.goal}, Dieta: ${p.dietType}). Calorías: ${m.targetCalories}. Usa ingredientes baratos de Chile (feria/Lider). Devuelve SOLO JSON: {"breakfast":{"name":"","description":"","calories":0,"ingredients":[]},"lunch":{...},"dinner":{...},"snack":{...}}`;
       const result = await model.generateContent(prompt);
-      const response = await result.response;
-      let text = response.text();
-      // Limpieza básica del JSON por si acaso
-      text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      
-      const jsonPlan = JSON.parse(text);
-      setPlan(jsonPlan);
-      localStorage.setItem('nutri_plan', JSON.stringify(jsonPlan));
+      const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const data = JSON.parse(text);
+      setPlan(data);
+      localStorage.setItem('nutri_plan', JSON.stringify(data));
     } catch (e) {
       console.error(e);
-      alert('Error generando dieta. Intenta de nuevo.');
     } finally {
-      setLoadingPlan(false);
+      setLoading(false);
     }
   };
 
-  const sendMessage = async () => {
-    if (!msgInput.trim()) return;
-    if (!apiKey) { alert("Error: Falta API Key"); return; }
+  const onProfileComplete = (p: UserProfile) => {
+    const m = calculateMetrics(p);
+    setProfile(p);
+    setMetrics(m);
+    localStorage.setItem('nutri_profile', JSON.stringify(p));
+    generateDiet(p, m);
+  };
 
-    const newMsg: ChatMessage = { role: 'user', text: msgInput };
-    setMessages(prev => [...prev, newMsg]);
-    setMsgInput('');
-    setLoadingMsg(true);
-
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userMsg: ChatMessage = { role: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
     try {
-      const context = `
-        Eres un Nutricionista experto enfocado en Chile.
-        Usuario: ${profile?.name}, ${profile?.age} años, Objetivo: ${profile?.goal}.
-        Calorías diarias: ${metrics?.targetCalories}.
-        Recomienda alimentos accesibles en Chile y económicos (feria/supermercado).
-        Responde de forma corta, motivadora y útil.
-      `;
-      
-      // USO DE LA NUEVA LIBRERÍA PARA CHAT
-      const model = ai.getGenerativeModel({ model: "gemini-pro" });
-      const chat = model.startChat({
-        history: messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-      });
-      
-      const result = await chat.sendMessage(context + "\nUsuario dice: " + msgInput);
-      const response = await result.response;
-
-      setMessages(prev => [...prev, { role: 'model', text: response.text() || "No entendí, ¿puedes repetir?" }]);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(`Eres un nutricionista chileno. Ayuda a ${profile?.name}. Pregunta: ${input}`);
+      setMessages(prev => [...prev, { role: 'model', text: result.response.text() }]);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'model', text: "Error de conexión." }]);
-    } finally {
-      setLoadingMsg(false);
     }
   };
 
-  if (!profile) return <Onboarding onComplete={handleProfileComplete} />;
+  if (!profile) return <Onboarding onComplete={onProfileComplete} />;
 
   return (
-    <div className="flex justify-center min-h-screen bg-black text-zinc-100 font-sans selection:bg-emerald-500 selection:text-black">
-      <div className="w-full max-w-md bg-zinc-950 flex flex-col h-screen border-x border-zinc-800 relative shadow-2xl">
-        
-        {/* HEADER */}
-        <header className="px-6 py-4 flex items-center justify-between bg-zinc-900/50 backdrop-blur border-b border-zinc-800 z-10 sticky top-0">
-          <div>
-            <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                <Leaf className="text-emerald-500 fill-emerald-500" size={18} />
-                NutriGenius
-            </h1>
-            <p className="text-xs text-zinc-500 font-medium">
-                {activeTab === 'plan' ? 'Tu Plan de Hoy' : activeTab === 'coach' ? 'Asistente IA' : 'Tu Perfil'}
-            </p>
-          </div>
-          <div className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20">
-            {metrics?.targetCalories} kcal
-          </div>
+    <div className="flex justify-center min-h-screen bg-black text-white">
+      <div className="w-full max-w-md bg-zinc-950 flex flex-col h-screen border-x border-zinc-800">
+        <header className="p-6 border-b border-zinc-800 flex justify-between items-center">
+          <h1 className="font-bold flex items-center gap-2 text-emerald-500"><Leaf size={20}/> NutriGenius</h1>
+          <div className="text-xs bg-zinc-800 px-3 py-1 rounded-full">{metrics?.targetCalories} kcal</div>
         </header>
 
-        {/* MAIN CONTENT */}
-        <main className="flex-1 overflow-y-auto p-4 hide-scrollbar relative">
-          
-          {/* TAB: PLAN */}
-          {activeTab === 'plan' && (
-            <div className="space-y-6 pb-20 animate-in fade-in zoom-in-95 duration-300">
-              
-              {/* Macro Summary */}
-              <div className="glass-panel p-4 rounded-3xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
-                <div className="flex justify-between items-end mb-4 relative z-10">
-                   <div>
-                       <span className="text-xs text-zinc-400 uppercase tracking-wider font-bold">Objetivo Diario</span>
-                       <div className="text-2xl font-bold text-white mt-1">{metrics?.targetCalories} <span className="text-sm font-normal text-zinc-500">kcal</span></div>
-                   </div>
-                   <div className="bg-emerald-500 text-black p-2 rounded-xl">
-                       <TrendingUp size={20} />
-                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 relative z-10">
-                    <div className="bg-zinc-900/50 p-2 rounded-xl text-center border border-zinc-800">
-                        <div className="text-emerald-400 font-bold">{metrics?.protein}g</div>
-                        <div className="text-[10px] text-zinc-500 uppercase">Prot</div>
-                    </div>
-                    <div className="bg-zinc-900/50 p-2 rounded-xl text-center border border-zinc-800">
-                        <div className="text-blue-400 font-bold">{metrics?.carbs}g</div>
-                        <div className="text-[10px] text-zinc-500 uppercase">Carb</div>
-                    </div>
-                    <div className="bg-zinc-900/50 p-2 rounded-xl text-center border border-zinc-800">
-                        <div className="text-yellow-400 font-bold">{metrics?.fats}g</div>
-                        <div className="text-[10px] text-zinc-500 uppercase">Grasa</div>
-                    </div>
-                </div>
+        <main className="flex-1 overflow-y-auto p-4">
+          {activeTab === 'plan' ? (
+            <div className="space-y-6">
+              <div className="bg-emerald-500/10 p-6 rounded-3xl border border-emerald-500/20">
+                <p className="text-sm text-emerald-500 font-bold uppercase">Estado Nutricional</p>
+                <h2 className="text-3xl font-bold mt-1">{metrics?.bmi} BMI</h2>
+                <p className="text-zinc-400">{metrics?.bmiCategory}</p>
               </div>
 
-              {loadingPlan && <LoadingScreen text="Diseñando tu menú con ingredientes chilenos..." />}
-
-              {!loadingPlan && plan && (
+              {loading ? <LoadingScreen text="Cocinando tu plan..." /> : plan && (
                 <div className="space-y-4">
-                  {Object.entries(plan).map(([key, meal]: [string, any], idx) => (
-                    <div key={key} className="glass-panel p-5 rounded-3xl border-l-4 border-l-emerald-500 hover:bg-zinc-800/60 transition-colors" style={{ animationDelay: `${idx * 100}ms` }}>
-                       <div className="flex justify-between items-start mb-2">
-                           <span className="text-xs font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded-md">
-                               {key === 'breakfast' ? 'Desayuno' : key === 'lunch' ? 'Almuerzo' : key === 'dinner' ? 'Cena' : 'Snack'}
-                           </span>
-                           <span className="text-xs text-zinc-400 font-mono">{meal.calories} kcal</span>
-                       </div>
-                       <h3 className="text-lg font-bold text-white mb-1 leading-snug">{meal.name}</h3>
-                       <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{meal.description}</p>
-                       <div className="flex flex-wrap gap-1.5">
-                           {meal.ingredients.slice(0, 4).map((ing: string, i: number) => (
-                               <span key={i} className
+                  {Object.entries(plan).map(([key, meal]: [string, any]) => (
+                    <div key={key} className="bg-zinc-900 p-5 rounded-3xl border border-zinc-800">
+                      <p className="text-xs font-bold text-emerald-500 uppercase">{key}</p>
+                      <h3 className="text-xl font-bold mt-1">{meal.name}</h3>
+                      <p className="text-sm text-zinc-500 mt-1">{meal.description}</p>
+                      <div className="mt-3 flex gap-2 overflow-x-auto">
+                        {meal.ingredients.map((ing: string, i: number) => (
+                          <span key={i} className="text-[10px] bg-zinc-800 px-2 py-1 rounded-md whitespace-nowrap">{ing}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col h-full">
+              <div className="flex-1 space-y-4">
+                {messages.map((m, i) => (
+                  <div key={i} className={`p-4 rounded-2xl max-w-[80%] ${m.role === 'user' ? 'ml-auto bg-emerald-500 text-black' : 'bg-zinc-800 text-white'}`}>
+                    {m.text}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <input value={input} onChange={e => setInput(e.target.value)} placeholder="Pregunta algo..." className="flex-1 bg-zinc-800 p-4 rounded-xl outline-none" />
+                <button onClick={handleSend} className="bg-emerald-500 p-4 rounded-xl text-black"><Send size={20}/></button>
+              </div>
+            </div>
+          )}
+        </main>
+
+        <nav className="p-4 border-t border-zinc-800 flex justify-around">
+          <button onClick={() => setActiveTab('plan')} className={`p-2 ${activeTab === 'plan' ? 'text-emerald-500' : 'text-zinc-500'}`}><Utensils/></button>
+          <button onClick={() => setActiveTab('coach')} className={`p-2 ${activeTab === 'coach' ? 'text-emerald-500' : 'text-zinc-500'}`}><MessageSquare/></button>
+        </nav>
+      </div>
+    </div>
+  );
+}
