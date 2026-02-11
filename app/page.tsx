@@ -19,8 +19,8 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN IA ---
-// Usamos la variable de entorno pública
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+// CLAVE HARDCODED PARA SOLUCIÓN RÁPIDA
+const apiKey = "AIzaSyAVeyg2FV5gMKRaTSbdgvZ-5VauGhSvETk";
 let genAI: GoogleGenerativeAI | null = null;
 
 if (apiKey) {
@@ -288,7 +288,8 @@ export default function App() {
     setLoadingPlan(true);
     setPlan(null); // Clear previous
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      // USAMOS MODELO 1.5 FLASH (MÁS ESTABLE)
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = `
         Crea un plan de alimentación de 1 día (Desayuno, Almuerzo, Cena, Snack).
@@ -339,7 +340,8 @@ export default function App() {
     setLoadingMsg(true);
 
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      // USAMOS MODELO 1.5 FLASH (MÁS ESTABLE)
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
        
       const context = `
         Eres un Nutricionista experto enfocado en Chile.
