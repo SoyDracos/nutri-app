@@ -19,9 +19,13 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN IA ---
-// Usamos la variable de entorno pública para que funcione en el navegador del cliente
+// Usamos la variable de entorno pública
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(apiKey);
+let genAI: GoogleGenerativeAI | null = null;
+
+if (apiKey) {
+  genAI = new GoogleGenerativeAI(apiKey);
+}
 
 // --- TIPOS ---
 interface UserProfile {
@@ -136,7 +140,7 @@ const Onboarding = ({ onComplete }: { onComplete: (p: UserProfile) => void }) =>
       });
     }
   };
-  
+   
   const update = (k: keyof UserProfile, v: any) => setData((p: any) => ({...p, [k]: v}));
 
   return (
@@ -226,7 +230,7 @@ const Onboarding = ({ onComplete }: { onComplete: (p: UserProfile) => void }) =>
             <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform"/>
           </button>
         </div>
-        
+         
         <div className="flex justify-center gap-2">
             {[1,2,3,4].map(i => <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i <= step ? 'w-8 bg-emerald-500' : 'w-2 bg-zinc-800'}`} />)}
         </div>
@@ -240,7 +244,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [metrics, setMetrics] = useState<UserMetrics | null>(null);
   const [activeTab, setActiveTab] = useState<'plan' | 'coach' | 'profile'>('plan');
-  
+   
   // State for Plan
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
@@ -276,6 +280,11 @@ export default function App() {
   };
 
   const generateDiet = async (userProfile: UserProfile, userMetrics: UserMetrics) => {
+    if (!genAI) {
+      alert("Error de configuración: Falta la API Key");
+      return;
+    }
+
     setLoadingPlan(true);
     setPlan(null); // Clear previous
     try {
@@ -285,13 +294,13 @@ export default function App() {
         Crea un plan de alimentación de 1 día (Desayuno, Almuerzo, Cena, Snack).
         Perfil: ${userProfile.dietType}, Objetivo: ${userProfile.goal}.
         Calorías Totales Objetivo: ${userMetrics.targetCalories}.
-        
+         
         CONTEXTO LOCAL: Chile.
         INSTRUCCIONES DE INGREDIENTES: Usa exclusivamente ingredientes económicos y muy comunes en supermercados o ferias de Chile.
         - Prioriza: Pollo, pavo, carne molida baja en grasa, jurel en lata, atún, huevos, legumbres (lentejas, porotos, garbanzos), arroz, fideos, papas, avena, pan (marraqueta/hallulla integral), frutas de estación (manzana, plátano, naranja) y verduras comunes (lechuga, tomate, zanahoria, zapallo).
         - EVITA: Salmón, camarones, cortes de carne caros, frutas exóticas o ingredientes difíciles de encontrar.
         - Estilo: Cocina casera, simple y rica.
-        
+         
         Devuelve SOLO un JSON con esta estructura exacta, sin texto extra:
         {
           "breakfast": { "name": "", "description": "", "calories": 0, "protein": 0, "carbs": 0, "fats": 0, "ingredients": [""] },
@@ -305,7 +314,7 @@ export default function App() {
       const result = await model.generateContent(prompt);
       const response = await result.response;
       let text = response.text();
-      
+       
       // Limpiar el JSON si viene con bloques de código
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
@@ -314,7 +323,7 @@ export default function App() {
       localStorage.setItem('nutri_plan', JSON.stringify(jsonPlan));
     } catch (e) {
       console.error(e);
-      alert('Error generando dieta. Intenta de nuevo. Verifica tu conexión o API Key.');
+      alert('Error generando dieta. Intenta de nuevo.');
     } finally {
       setLoadingPlan(false);
     }
@@ -322,6 +331,8 @@ export default function App() {
 
   const sendMessage = async () => {
     if (!msgInput.trim()) return;
+    if (!genAI) return;
+
     const newMsg: ChatMessage = { role: 'user', text: msgInput };
     setMessages(prev => [...prev, newMsg]);
     setMsgInput('');
@@ -329,7 +340,7 @@ export default function App() {
 
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      
+       
       const context = `
         Eres un Nutricionista experto enfocado en Chile.
         Usuario: ${profile?.name}, ${profile?.age} años, Objetivo: ${profile?.goal}.
@@ -337,7 +348,7 @@ export default function App() {
         Recomienda alimentos accesibles en Chile y económicos (feria/supermercado).
         Responde de forma corta, motivadora y útil.
       `;
-      
+       
       const chat = model.startChat({
         history: [
             {
@@ -358,7 +369,7 @@ export default function App() {
       setMessages(prev => [...prev, { role: 'model', text: text }]);
     } catch (e) {
       console.error(e);
-      setMessages(prev => [...prev, { role: 'model', text: "Error de conexión. Verifica tu API Key." }]);
+      setMessages(prev => [...prev, { role: 'model', text: "Error de conexión. Verifica tu conexión." }]);
     } finally {
       setLoadingMsg(false);
     }
@@ -369,7 +380,7 @@ export default function App() {
   return (
     <div className="flex justify-center min-h-screen bg-black text-zinc-100 font-sans selection:bg-emerald-500 selection:text-black">
       <div className="w-full max-w-md bg-zinc-950 flex flex-col h-screen border-x border-zinc-800 relative shadow-2xl">
-        
+         
         {/* HEADER */}
         <header className="px-6 py-4 flex items-center justify-between bg-zinc-900/50 backdrop-blur border-b border-zinc-800 z-10 sticky top-0">
           <div>
@@ -388,11 +399,11 @@ export default function App() {
 
         {/* MAIN CONTENT */}
         <main className="flex-1 overflow-y-auto p-4 hide-scrollbar">
-          
+           
           {/* TAB: PLAN */}
           {activeTab === 'plan' && (
             <div className="space-y-6 pb-20 animate-in fade-in zoom-in-95 duration-300">
-              
+               
               {/* Macro Summary */}
               <div className="glass-panel p-4 rounded-3xl relative overflow-hidden bg-zinc-900/40 border border-zinc-800">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
@@ -442,7 +453,7 @@ export default function App() {
                        </div>
                     </div>
                   ))}
-                  
+                   
                   <button 
                     onClick={() => metrics && generateDiet(profile, metrics)}
                     className="w-full py-4 text-zinc-500 text-sm font-medium flex items-center justify-center gap-2 hover:text-white transition-colors"
