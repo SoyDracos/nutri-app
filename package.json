@@ -17,5 +17,11 @@
     "tailwindcss": "^3.3.0",
     "postcss": "^8",
     "autoprefixer": "^10"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18"
   }
 }
